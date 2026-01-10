@@ -7,14 +7,21 @@ const app = express();
 app.use(express.json());
 
 let logsBatch = [];
+let isFlushing = false;
 
 //  Run cron every 10 seconds
 cron.schedule("*/1 * * * * *", async () => {
-	await flushLogs();
+	if (!isFlushing) {
+		flushLogs().catch((err) => {
+			console.error("Flush failed:", err.message);
+		});
+	}
 });
 
 async function flushLogs() {
-	if (logsBatch.length === 0) return;
+	if (logsBatch.length === 0 || isFlushing) return;
+
+	isFlushing = true;
 
 	const logsToFlush = [...logsBatch];
 	logsBatch = [];
@@ -37,6 +44,8 @@ async function flushLogs() {
 
 		// Requeue logs on failure
 		logsBatch.unshift(...logsToFlush);
+	} finally {
+		isFlushing = false;
 	}
 }
 
@@ -44,7 +53,7 @@ app.post("/ingest", (req, res) => {
 	logsBatch.push(req.body);
 
 	if (logsBatch.length > 10_000) {
-		logsBatch = logsBatch.slice(-10_000);
+		logsBatch.splice(0, logsBatch.length - 10_000);
 	}
 
 	res.status(200).send("Log received");
