@@ -1,8 +1,13 @@
 services:
     app:
         build: .
+        container_name: sidecar
         ports:
             - "9000:9000"
         env_file:
             - .env
         restart: always
+
+networks:
+    advoid:
+        external: true
